@@ -1,0 +1,52 @@
+{
+  "harness_controls": [
+    "validate_input",
+    "blind",
+    "refuse",
+    "log",
+    "escalate"
+  ],
+  "format_problems": [],
+  "entries": [
+    {
+      "control": "validate_input",
+      "principle": "Robustness, security and safety",
+      "principle_source": "OECD AI Principles (2019, updated 2024), principle 1.4 'Robustness, security and safety'",
+      "instrument": "Law of the Republic of Kazakhstan No. 230-VIII 'On Artificial Intelligence' (17 November 2025)",
+      "provision": "Art. 4 (principle of safety and security) and Art. 11 (confirm the article number in the official text)",
+      "why_here": "The bare agent had 0 unparseable replies on 400 clean profiles, but nothing stops an impossible value (GPA 9.9, exam score -5) from being scored, so the check refused that request with 0 model calls where the bare pipeline rejected it by accident."
+    },
+    {
+      "control": "blind",
+      "principle": "Fairness and non-discrimination",
+      "principle_source": "UNESCO Recommendation on the Ethics of Artificial Intelligence (2021), Section III.2 'Principles', fairness and non-discrimination (first paragraph: 28; verify in the PDF)",
+      "instrument": "Law of the Republic of Kazakhstan No. 94-V 'On Personal Data and Their Protection' (21 May 2013)",
+      "provision": "Art. 7 p. 9 (data whose content and volume are excessive for the purpose is not processed) and Art. 12 p. 1 (only data necessary and sufficient)",
+      "why_here": "Part 1 found a flagship-minus-regional score gap of +2.5 [+1.1, +4.1] (sign p = 0.002) with no flip rate above its floor, so I removed name and university from the scoring prompt, accepting that this moved 166 of 400 scores (mean |delta| 14.01) and is not proof of fairness."
+    },
+    {
+      "control": "refuse",
+      "principle": "Right to privacy and data protection",
+      "principle_source": "UNESCO Recommendation on the Ethics of Artificial Intelligence (2021), Section III.2 'Principles', right to privacy and data protection (first paragraph: 32; verify in the PDF)",
+      "instrument": "Law of the Republic of Kazakhstan No. 94-V 'On Personal Data and Their Protection' (21 May 2013)",
+      "provision": "Art. 19-1 p. 1 (automated processing affecting rights is prohibited without consent), Art. 7 p. 1 and p. 8 (consent; predetermined lawful purposes), Art. 14 (use only for declared purposes)",
+      "why_here": "The bare pipeline screened all 6 test requests, including a wrong purpose, a minor, a missing consent and an instruction in the name field, while the harness refused 5 of 6 with 0 model calls and 0 of 400 clean profiles were refused."
+    },
+    {
+      "control": "log",
+      "principle": "Transparency and explainability",
+      "principle_source": "UNESCO Recommendation on the Ethics of Artificial Intelligence (2021), Section III.2 'Principles', transparency and explainability (first paragraph: 37; verify in the PDF)",
+      "instrument": "Law of the Republic of Kazakhstan No. 94-V 'On Personal Data and Their Protection' (21 May 2013)",
+      "provision": "Art. 19-1 p. 2-3 (explain the automated procedure; consider an objection within 3 working days) and Art. 25 p. 2 pt 5 (owner must be able to prove the subject's consent)",
+      "why_here": "Because blinding changed 50 of 400 outcomes and 166 scores, a reviewer answering an applicant's objection needs the 406 records with input hash, fields shown and withheld, reason code and controls fired, kept as field names rather than values."
+    },
+    {
+      "control": "escalate",
+      "principle": "Human oversight and determination",
+      "principle_source": "UNESCO Recommendation on the Ethics of Artificial Intelligence (2021), Section III.2 'Principles', human oversight and determination (first paragraph: 35; verify in the PDF)",
+      "instrument": "Law of the Republic of Kazakhstan No. 230-VIII 'On Artificial Intelligence' (17 November 2025)",
+      "provision": "Art. 8 (responsibility and controllability: constant control of the AI system) and Art. 9 (priority of human well-being and free will in decisions)",
+      "why_here": "Rejected and shortlisted profiles overlap at scores 40-49 (33 and 31 profiles), so the 40-59 band sent 38 of 400 profiles (9.5%, against 27.5% planned) to a person, all as 'borderline'; my own extra rule fired 0 times."
+    }
+  ]
+}
