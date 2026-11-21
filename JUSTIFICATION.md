@@ -1,93 +1,57 @@
-# JUSTIFICATION — the design of the harness, and why
-<!-- STUDENT: replace -->
+# JUSTIFICATION — Lab 06: What the system may do, must refuse, and records
 
-Replace this whole template with your own text. Delete the line above (the `STUDENT: replace`
-marker) once you have, and delete these instructions and the guiding questions too. Keep the headings
-that follow. Which dimension each section is graded against is in the README.
-
-Two rules for the whole document:
-
-- **Every claim about a law needs a citation to the instrument and the provision** it rests on,
-  written so a reader can find the text. You identify the instruments yourself, from the primary text.
-  A chat model's statement is not a citation.
-- **Everything you describe must be in the code or in the submitted run.** A control you describe
-  but did not build, or a refusal you state but never triggered, belongs under "what the design still
-  fails to protect against".
-
-The guiding questions are prompts, not a form.
+The Tulpar Scholarship Fund is fictional; I treat it as operating in Kazakhstan, so the binding instruments are Kazakh. The EU AI Act is mentioned only as an outside comparison. Numbers are from my executed notebook.
 
 ## 1. What the system may do
 
-(Dimension: Integration of Constraints into the Design.)
+The agent may **score and recommend** (shortlist / reject) one application at a time, and only when all of these hold:
 
-- What is the system for, stated narrowly? What decisions may it make on its own, and which may it only
-  inform?
-- For each control you built (input validation, blinding, refusal, log, escalation): which
-  constraint made you build it, and where in the code can a reader find it?
-- Did any constraint change the architecture itself, so that the design would be different without it?
-  Name a decision you made differently because of a constraint, and what you would have done otherwise.
+- the purpose is `scholarship_screening` (nothing else, e.g. not "rank by ethnicity");
+- the applicant is 18 or older and has consented to automated processing;
+- all values are inside valid ranges (`validate_input`);
+- the model sees merit and need fields only: name and university are withheld (`blind`);
+- the score is outside the 40–59 band and no other escalation rule fires — otherwise a person decides.
 
-## 2. What it must refuse
+It may **not** be the final word on borderline cases. In the run, 338 profiles got an automated shortlist, 24 an automated reject, 38 (9.5%) went to a person.
 
-(Dimension: Refusal Boundaries and Enforcement.)
+*Legal basis:* Law of the Republic of Kazakhstan No. 94-V "On Personal Data and Their Protection" of 21 May 2013, Art. 7 p. 1 (processing with the subject's consent), Art. 7 p. 8 (collection and processing limited to specific, predetermined, lawful purposes), Art. 14 (use only for the declared purposes of collection); and Art. 19-1 p. 1 (automated processing from which rights or legitimate interests arise, change or end is prohibited unless the subject consented).
 
-- What does it refuse (purposes, inputs, applicants)? Where is each refusal enforced in code, and
-  where in your submitted run did it fire?
-- For each refusal: **which legitimate case does it also block**, and who bears that cost? Is that cost
-  acceptable, and why?
-- What happens to a refused request: is it recorded, is anyone told, can the person ask for a decision to
-  be made by a human instead?
+## 2. What it must refuse (and what the measurement says about each)
+
+| refusal | reason code | tested | basis |
+|---|---|---|---|
+| purpose other than scholarship screening | `purpose_not_allowed` | refused, 0 model calls (bare pipeline shortlisted it) | 94-V Art. 7 p. 8, Art. 14 |
+| applicant under 18 | `minor` | refused, 0 calls (bare rejected it) | 94-V Art. 7 p. 1, Art. 8 p. 1: consent comes from the subject *or the legal representative*; the system has no way to collect that, so it refuses and the case must go to a human channel |
+| no consent to automated processing | `no_consent` | refused, 0 calls (bare rejected it) | 94-V Art. 19-1 p. 1 |
+| impossible values (GPA 9.9, exam −5) | `invalid_input` | refused, 0 calls (bare rejected it) | data-quality control; see section 5 on why this is the hardest to tie to a statute |
+| instruction hidden in a field | `prompt_injection` | refused, 0 calls (bare shortlisted it) | integrity of the decision (AI Law Art. 8, constant control); not a data-protection rule |
+
+A refusal is not a rejection: the applicant must be told and offered another route. A wrong refusal denies an honest applicant any evaluation; on the 400 clean measured profiles my rules refused 0, but those profiles are synthetic and clean, so the false-refusal rate on real data is unknown. The injection rule is a keyword list and is the weakest refusal; the stronger protection is that name and university are blinded and never reach the model.
 
 ## 3. What record it keeps
 
-(Dimension: Accountability Record and Auditability.)
+`decisions.jsonl`: one line per call (406 lines: 400 measured + 6 refusal tests; 339 shortlist, 24 reject, 38 escalate, 5 refuse). Each line has a record id, application id, SHA-256 of the exact text the model saw, which fields were shown and withheld, model and prompt version, harness settings, raw reply, decision, score, controls fired, outcome, reason code, whether a person was involved, and a timestamp. It stores field **names**, never values, so it is not a second copy of applicants' data. A reviewer can say why each decision was made without re-running the model, and can answer an applicant's objection from the record.
 
-- What is the **audit question** your record is designed to answer (for example, "why did this
-  applicant get this outcome, and could someone else reconstruct it without re-running the model?")?
-  State it in one sentence, then show that a record in `decisions.jsonl` answers it.
-- What is in each record, and what is left out on purpose (for example, personal data you chose not to
-  store)? Why that line?
-- How long is the record kept, who may read it, who may change it, and what stops a record being
-  edited after the fact? What does the record not let you reconstruct?
+*Open items:* retention period (94-V Art. 12 p. 2: data is kept until the purpose is reached) and access control for the log are not defined in this prototype.
 
-## 4. The legal constraints
+## 4. Trade-offs I accepted
 
-(Dimension: Identification and Citation of Legal Constraints.)
+1. **Blinding instead of (or before) a counterfactual check.** Blinding adds no model calls (400 vs 400). The counterfactual extension would double the calls and leave the name visible to the model. Cost accepted: 166 of 400 scores changed (mean |Δ| 14.01) and 50 of 400 outcomes changed, 12 of them between shortlist and reject. I accepted this to close the channel for name and university, but it is a real cost and I do not call it "bias removed".
+2. **A person reads ~10% of applications.** 38 of 400 (9.5%), lower than the 27.5% I planned (110 of 400) because the band was set on unblinded scores. I kept band 40–59 because rejected and shortlisted profiles overlap at 40–49 (33 and 31), and I will recalibrate on blinded scores before any real use.
+3. **Strict refusal over auto-repair.** I refuse impossible, unconsented, underage or off-purpose requests instead of guessing or correcting them. Price: those applicants need a manual route.
+4. **Small measurement.** 40 pairs per attribute detect only large effects (≥ 6 one-sided pairs, 15%). The male/female result (0 vs 4, p = 0.125) is therefore unresolved, and I did not hide a control because the test found nothing.
+5. **Not built yet:** applicant notification and an objection channel with a three-working-day response (94-V Art. 19-1 p. 2–3).
 
-- Which instruments apply to an automated screening decision about people, and why do they
-  apply to this system (jurisdiction, subject matter, who is the operator)? Cite the instrument and the
-  provision for each.
-- For each, what does the law **require** of the system, and what does it merely **permit** or leave
-  to you? Where did you do more than the law requires, and why?
-- Where is the text you cite stated to apply to automated decisions specifically? If you could
-  not find a provision for a control, say so rather than inventing one.
+## 5. Which control was hardest to tie to a provision (prediction vs finding)
 
-## 5. The ethical principles
+*My prediction in the notebook:* `blind` and `escalate` would be hardest, because the personal-data law does not mention bias or human review.
 
-(Dimension: Identification of Applicable Ethical Principles.)
+*What I found:* the prediction was **wrong**. `blind` ties to 94-V Art. 7 p. 9 (data whose content and volume are excessive for the purpose is not to be processed) and Art. 12 p. 1 (only data necessary and sufficient); `escalate` ties to Art. 19-1 (explain, allow objection, a person looks) and to the AI Law's principles of controllability and priority of human decision-making. The **hardest** is `validate_input`: no article requires range checks on a GPA. I tied it to the safety and reliability principle of the AI Law and to OECD robustness, and I mark that link as the weakest in the register. Also, the `blind` argument is only partial: university can be a legitimate eligibility criterion for some scholarships, so blinding is justified for the scoring step, not necessarily for the whole process.
 
-- Which principles govern an automated screening decision, and which decision in **this** system does
-  each bear on (not in general)? Cite the source in which you found each principle named, and say
-  what status that text has.
-- Where do the principles conflict with one another in your design (for example, between
-  treating applicants identically and treating applicants fairly given what you measured)? Which did
-  you put first, and why?
-- Where does ethics demand something the law does not?
+## 6. Instruments used (please verify before submission)
 
-## 6. The trade-offs
-
-(Dimension: Trade-off Analysis and Justification.)
-
-- For each control: what does it cost (errors, speed, reviewer time, applicant privacy, extra model
-  calls), and what harm does it prevent? Use your before-and-after measurement where you can.
-- The width of your escalation band is a trade-off too: how many applicants does it send to a person, who reads
-  them, and what happens to the cases outside it that nobody re-checks? A threshold calibrated on one
-  configuration does not transfer to another: did you recalibrate it after you changed what the model
-  sees, and what share was actually escalated?
-- Why did you choose the balance you did, and what would make you choose differently?
-- What does the design **still fail to protect against**? What would closing that gap take, and why did
-  you not do it?
-
-## AI-use declaration
-
-Half a page: which AI tools you used in this assignment and for what. If you used none, say so.
+- Law of the RK No. 94-V of 21 May 2013 "On Personal Data and Their Protection" — consolidated text read at https://zakon.uchet.kz/rus/docs/Z1300000094 (Art. 5, 7, 8, 12, 14, 19-1, 22, 25 read in full; Art. 19-1 was added by Law No. 231-VIII of 17 Nov 2025).
+- Law of the RK No. 230-VIII of 17 Nov 2025 "On Artificial Intelligence", in force 60 days after publication (https://zan.adilet.kz/ru/ob-iskusstvennom-intellekte-17-11-2025-no-230-viii/). I checked the article titles and the seven principles (Art. 4: legality, fairness and equality, transparency and explainability, responsibility and controllability, priority of human well-being and free will in decisions, data protection and confidentiality, safety and security; Art. 6 fairness and equality, Art. 7 transparency and explainability, Art. 8 responsibility and controllability, Art. 9 priority of human well-being). **I did not read the full text; open it and confirm the article numbers (especially 10 and 11) before you submit.**
+- UNESCO Recommendation on the Ethics of Artificial Intelligence (2021), Section III.2 "Principles": fairness and non-discrimination; right to privacy and data protection; human oversight and determination; transparency and explainability. **Paragraph numbers in the register are the first paragraph of each principle from memory — check them in the PDF** (https://unesdoc.unesco.org/ark:/48223/pf0000381137).
+- OECD AI Principles (2019, updated 2024), principle 1.4 robustness, security and safety.
+- For comparison only, not binding here: Regulation (EU) 2024/1689 (AI Act) Art. 10, 12 and 14.
